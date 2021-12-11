@@ -1,0 +1,49 @@
+==============================================================================
+Written by : Meytal Abrahamian  login : meytalben  id : 211369939
+			 Tomer Akrish               tomerak         315224295
+==============================================================================
+
+Program file: ex5a1.c
+===============================================================================
+This program defines in a shared memory an array of ARR-SIZE integers
+In the first cell the program enters its process number
+For the next three cells the program inserts the value zero
+And into the fifth cell used as a 'lock' the program inserts the value 1
+The rest of the cells the program resets.
+After setting up the array the program goes to sleep until you get a signal
+When the program receives a signal it wakes up, shows how many different 
+values there are in the array the minimum value and the maximum value.
+Finally the program free the shared memory and finishes
+
+input:		no input
+output:		
+		There is NEW-PRIMES new primes in array
+		Min prime in array: MIN_PRIME
+		Max prime in array: MAX_PRIME
+
+compile: gcc -Wall ex5a1.c -o ex5a1
+run: ./ex5a1
+
+
+Program file: ex5a2.c
+===============================================================================
+This program connects to the shared memory that Program A has created. 
+The program is run in a loop.
+Before the program enters the loop, it checks if all the manufacturers are 
+connected.
+In each loop loop the program produces a number. If it is primary, it adds it 
+to the array in the shared memory.
+She counts how many new values she added and how many times a value she added 
+appeared whose frequency is in the highest array.
+If the program sees that the array is full, it prints the data:
+How many entries did he add first, 
+and how many times did the entry he added appear, and appear the most times
+Then the program sends a signal to program A and ends.
+
+input:		no input
+output:				
+		The amount of new primes I added to the array: NEW_PRIMES
+		The number with the highest frequency is: MAX_APPEAR
+
+compile: gcc -Wall ex5a2.c -o ex5a2
+run: ./ex5a2
