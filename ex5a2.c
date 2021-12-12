@@ -28,16 +28,17 @@ Then the program sends a signal to program A and ends.
 #include <signal.h>
 
 // ----------------------------------------------------------------------------
-#define ARR_SIZE 1000
-#define LOCK_CELL 4
-#define ZERO 48
-int shm_id;
-int* shm_ptr;
+#define ARR_SIZE 1000			// size of main program array 
+#define LOCK_CELL 4				// the cell designed to lock the shared memory
+#define ZERO 48					// asci value for 0
+#define START_VALUE_CELL 5		// the cell that from it we start primes array
+int shm_id;						// shared memory id
+int* shm_ptr;					// pointer to shared memory
 
 // ----------------------------------------------------------------------------
 void validat_arg(int argc, char* argv_0);
 void start(int manu_num);
-void open_shm(key_t* key);
+void connect_to_shm();
 void create_primes(int manu_num);
 int next_cell_index();
 int count_prime_appear(int prime);
@@ -46,42 +47,41 @@ int get_prime();
 int is_prime(int number);
 // ----------------------------------------------------------------------------
 
+//--------------------------------main-----------------------------------------
 int main(int argc, char* argv[])
 {
-	key_t key;
-
-
 	validat_arg(argc, argv[0]);
-	printf("past valid..\n");
 	srand((unsigned int)(*argv[1]) - ZERO);
-	open_shm(&key);
-	printf("shm is open\n");
+	connect_to_shm();
 	start((int)(*argv[1]) - ZERO);
-	printf("can start\n");
 	create_primes((int)(*argv[1]) - ZERO);
-	
+
 	return (EXIT_SUCCESS);
 }
 // ----------------------------------------------------------------------------
 
+// this function is before start create prime numbers it check if all 
+// manufacturer connected to shared memory and end only when they are connected
 void start(int manu_num)
 {
-	int can_start = 0;
+	int can_start = 0;			// say if can start create prime or not
 
 	shm_ptr[manu_num] = 1;
 
 	while (!can_start)
 		if (shm_ptr[1] == 1 && shm_ptr[2] == 1 && shm_ptr[3] == 1)
 			can_start = 1;
-
-	shm_ptr[4] = 0;
 }
 // ----------------------------------------------------------------------------
 
-void open_shm(key_t* key)
+// this function connect this prosses to a shared memory exists. it get its key 
+// and id and then connect
+void connect_to_shm()
 {
+	key_t key;		// key for shm
+
 	// create THE SAME key for the shm as the producer	
-	if (((*key) = ftok(".", '3')) == -1)
+	if ((key = ftok(".", '5')) == -1)
 	{
 		perror("ftok failed: ");
 		exit(EXIT_FAILURE);
@@ -89,7 +89,7 @@ void open_shm(key_t* key)
 
 	// get the id of the block of memory 
 	// that was, hopefully, already created by the producer
-	if ((shm_id = shmget((*key), ARR_SIZE, /* OR: 0*/ 0600)) == -1)
+	if ((shm_id = shmget(key, ARR_SIZE, /* OR: 0*/ 0600)) == -1)
 	{
 		perror("shmget failed: ");
 		exit(EXIT_FAILURE);
@@ -104,24 +104,29 @@ void open_shm(key_t* key)
 }
 // ----------------------------------------------------------------------------
 
+// this function create primes and insert them into shared memory array
+// when array is full it send signal to array owner
 void create_primes(int manu_num)
 {
+	int prime,						// for prime number
+		appear = 0,					// to count appearence of some prime
+		count_new_primes = 0,		// to count new prime in array
+		max_appear = 0;				// to keep max appearence in array
+
 	while (1)
 	{
-		int prime = get_prime(),
-			appear = 0,
-			count_new_primes = 0,
-			max_appear = 0;
+		prime = get_prime();
 
 		while (shm_ptr[LOCK_CELL] == 0)
 			sleep(1);
 
-		shm_ptr[LOCK_CELL] = 1;
-		if (shm_ptr[1] + shm_ptr[2] + shm_ptr[3] == ARR_SIZE - 5)
+		// when LOCK_CELL open
+		shm_ptr[LOCK_CELL] = 0;
+		if ((shm_ptr[1] + shm_ptr[2] + shm_ptr[3]) == ARR_SIZE - START_VALUE_CELL)
 			end_manufacturer(count_new_primes, max_appear);
 
 		shm_ptr[next_cell_index()] = prime;
-		shm_ptr[LOCK_CELL] = 0;
+		shm_ptr[LOCK_CELL] = 1;
 
 		appear = count_prime_appear(prime);
 
@@ -136,20 +141,23 @@ void create_primes(int manu_num)
 }
 // ----------------------------------------------------------------------------
 
+// this function find the next free cell in array in the shared memory 
+// and returns it
 int next_cell_index()
 {
 	int index = 2;		// because 0 is for array owner and 4 is for lock cell
 
-	return index + shm_ptr[1] + shm_ptr[2] + shm_ptr[3];
+	return (index + shm_ptr[1] + shm_ptr[2] + shm_ptr[3]);
 }
 // ----------------------------------------------------------------------------
 
+// this function count appear on some prime in shared memory array
 int count_prime_appear(int prime)
 {
-	int i,
-		counter = 0;
+	int i,					// for loop
+		counter = 0;		// for counter
 
-	for (i = 5; i < next_cell_index(); ++i)
+	for (i = START_VALUE_CELL; i < next_cell_index(); ++i)
 		if (shm_ptr[i] == prime)
 			++counter;
 
@@ -157,12 +165,16 @@ int count_prime_appear(int prime)
 }
 // ----------------------------------------------------------------------------
 
+// this function is for end manufacturer prosses. it prints informations 
+// send SIGTERM gisnal to array owner, update LOCK_CELL to 1 to let all 
+// manufacturer end and end
 void end_manufacturer(int new_primes, int max_appear)
 {
 	printf("The amount of new primes I added to the array: %d\n", new_primes);
 	printf("The number with the highest frequency is: %d\n", max_appear);
 
-	kill(shm_ptr[0], SIGINT);
+	kill(shm_ptr[0], SIGTERM);
+	shm_ptr[LOCK_CELL] = 1;
 
 	exit(EXIT_SUCCESS);
 }
@@ -196,6 +208,8 @@ int is_prime(int number)
 }
 // ----------------------------------------------------------------------------
 
+// this function validat that we get all parameter we exepted to get in argv
+// argoment
 void validat_arg(int argc, char* argv_0)
 {
 	if (argc != 2)

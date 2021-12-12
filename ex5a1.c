@@ -16,69 +16,56 @@ Finally the program free the shared memory and finishes
 
 //-----------------------------------------------------------------------------
 #include <stdio.h>
-#include <stdlib.h> // for exit()
-#include <string.h> // for strcpy(), strcmp()
-#include <unistd.h> // for sleep()
+#include <stdlib.h> 
+#include <string.h> 
+#include <unistd.h> 
 #include <sys/types.h>
 #include <sys/ipc.h>
 #include <sys/shm.h>
 #include <signal.h>
 
 //-----------------------------------------------------------------------------
-#define ARR_SIZE 1000
-#define SUM_OF_MANU 3
-int shm_id;
-int new_primes = 0;
-int min_prime = 0;
-int max_prime = 0;
-int* shm_ptr;
+#define ARR_SIZE 1000		// size of main program array 
+#define NUM_OF_MANU 3		// num of manufacturers
+#define LOCK_CELL 4			// the cell designed to lock the shared memory
+#define START_VALUE_CELL 5	// the cell that from it we start primes array
+int shm_id;					// shared memory id
+int new_primes = 0;			// for new primes in array
+int min_prime = 0;			// for minimum prime in array
+int max_prime = 0;			// for  maximum prime in array 
+int* shm_ptr;				// for pointer to shared memory  
 
 //-----------------------------------------------------------------------------
 void signal_handler(int sig_num);
 void open_shm();
 void initializ_shm();
-void open_lock_to_manu();
 void map_array();
+int is_in_arr(int arr[], int num);
 //-----------------------------------------------------------------------------
 
+//--------------------------------main-----------------------------------------
 int main() 
 {
-	signal(SIGINT, signal_handler);
-	open_shm();	
-	printf("shm is open\n");
-	initializ_shm();
-	printf("initializ shm\n");
-	open_lock_to_manu();
+	signal(SIGTERM, signal_handler);
+	signal(SIGINT, signal_handler);			// to make sure we free the memory
 
-	while (1) {} // todo - it will be better with sleep()	
+	open_shm();	
+	initializ_shm();
+
+	pause();								// pause program until get signal
 
 	return (EXIT_SUCCESS);
 }
 //-----------------------------------------------------------------------------
 
-void open_lock_to_manu()
-{
-	int all_manu_connected = 0;
-
-	while (!all_manu_connected)
-	{
-		if (shm_ptr[1] == 1 && shm_ptr[2] == 1 && shm_ptr[3] == 1)
-		{
-			shm_ptr[4] = 1;
-			all_manu_connected = 1;
-		}
-	}
-
-	printf("opend");
-}
-//-----------------------------------------------------------------------------
-
+// this function 'open' a shared memory. it gets key, id and connect this 
+// prosses to shared memory
 void open_shm()
 {
 	key_t key;    // key for shm
 
 	// create a key for the shm	
-	if ((key = ftok(".", '3')) == -1)
+	if ((key = ftok(".", '5')) == -1)
 	{
 		perror("ftok failed: ");
 		exit(EXIT_FAILURE);
@@ -101,26 +88,30 @@ void open_shm()
 }
 //-----------------------------------------------------------------------------
 
+// this function initializ the array in shared memory
 void initializ_shm()
 {
-	int i;
+	int i;			// for loops
 
 	shm_ptr[0] = getpid();				// insert to first cell prosses id
-	for (i = 1; i < SUM_OF_MANU; ++i)
+	
+	for (i = 1; i < NUM_OF_MANU; ++i)
 		shm_ptr[i] = 0;					// insert to each manu cell - 0
 
-	shm_ptr[4] = 1;						// to lock the shm
+	shm_ptr[LOCK_CELL] = 1;						// to lock the shm
 
 	// all the rest - to 0
-	for (i = 5; i < ARR_SIZE - 5; i++)
+	for (i = START_VALUE_CELL; i < ARR_SIZE - START_VALUE_CELL; i++)
 		shm_ptr[i] = 0;
 }
 //-----------------------------------------------------------------------------
 
+// this function is the function that handle with signals. It prints all the 
+// required information, free the memory and exit
 void signal_handler(int sig_num)
 {
 	map_array();
-	printf("There is %d new primes in array\n", new_primes); // todo - to think how todo it
+	printf("There is %d new primes in array\n", new_primes); 
 	printf("Min prime in array: %d\n", min_prime);
 	printf("Max prime in array: %d\n", max_prime);
 	
@@ -135,16 +126,40 @@ void signal_handler(int sig_num)
 }
 //-----------------------------------------------------------------------------
 
+// this function map the array in shared memory and find the max primem, min 
+// prime and new prime in array
 void map_array()
 {
-	int i;
+	int i,						// for loops	
+		arr[ARR_SIZE - START_VALUE_CELL];		// array that hold all new prime in main array
+	
+	for (i = 0; i < ARR_SIZE - START_VALUE_CELL; ++i)
+		arr[i] = 0;
 
-	for (i = 5; i < ARR_SIZE - 5; i++)
+	for (i = START_VALUE_CELL; i < ARR_SIZE - START_VALUE_CELL; i++)
 	{
 		if (shm_ptr[i] > max_prime || max_prime == 0)
 			max_prime = shm_ptr[i];
 		if (shm_ptr[i] < min_prime || min_prime == 0)
 			min_prime = shm_ptr[i];
+		if (!is_in_arr(arr, shm_ptr[i]))
+			++new_primes;
 	}	
+}
+//-----------------------------------------------------------------------------
+
+// This function checks if the number passed to it is within the array passed 
+// to it. If so, the function returns 1 otherwise it returns 0 and add the 
+// number to the array
+int is_in_arr(int arr[], int num)
+{
+	int i;			// for loop
+
+	for (i = 0; i < ARR_SIZE - START_VALUE_CELL && arr[i] != 0; ++i)
+		if (arr[i] == num)
+			return 1;
+
+	arr[i] = num;
+	return 0;
 }
 //-----------------------------------------------------------------------------

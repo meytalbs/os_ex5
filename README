@@ -47,3 +47,13 @@ output:
 
 compile: gcc -Wall ex5a2.c -o ex5a2
 run: ./ex5a2
+
+Race mode:
+In this program there is the following race mode: one of the manufacturers
+program found that the array in the shared memory is full and therefore sent
+a signal to the array filler to finish. Only the same program from the same
+manufacturer prints the required data while the other manufacturers when they
+go to check if the array is full - it has already been released from memory
+so they can not check it and get stuck.
+To resolve this issue, we have updated the cell used as a 1-point lock in the
+manufacturer's end function
